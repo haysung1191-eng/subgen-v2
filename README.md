@@ -1,5 +1,10 @@
 # subgen_v2
 
+Experimental timing-first Korean subtitle drafting pipeline.
+
+This project prioritizes subtitle timing inspectability over polished transcript quality. Whisper is used for draft text, while aligned token timing is treated as the timing authority. The current focus is local/offline experimentation, not production-grade subtitle quality.
+
+
 Minimal timing-first Korean subtitle drafting pipeline.
 
 This repository is for one practical use case:
