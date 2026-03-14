@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "subgen"
+version = "0.1.0"
+description = "Production-grade CLI subtitle generator optimized for timing accuracy"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{name = "Subgen"}]
+dependencies = [
+  "faster-whisper>=1.1.0",
+  "silero-vad>=5.1.2",
+  "torch>=2.2.0",
+  "numpy>=1.26.0",
+  "rich>=13.7.0",
+  "tqdm>=4.66.0"
+]
+
+[project.optional-dependencies]
+align = [
+  "whisperx>=3.3.0"
+]
+
+[project.scripts]
+subgen = "subgen.cli:main"
+subgen-gui = "subgen.gui:main"
+subgen-v2 = "subgen_v2.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]

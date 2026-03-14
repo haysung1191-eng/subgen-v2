@@ -1,0 +1,21 @@
+{
+  "preset": "ko-sync-final",
+  "model": "large-v2",
+  "device": "cuda",
+  "align_device": "cuda",
+  "alignment": "on",
+  "language": "ko",
+  "global_shift_ms": 0,
+  "timing_correction_ms": 0,
+  "vad_threshold": 0.55,
+  "vad_min_speech_ms": 260,
+  "vad_min_silence_ms": 220,
+  "vad_pad_ms": 50,
+  "vad_merge_gap_ms": 200,
+  "overlap_sec": 0.3,
+  "min_segment_sec": 0.2,
+  "max_segment_sec": 4.0,
+  "hard_gap_ms": 60,
+  "log_level": "INFO",
+  "batch_concurrency": 1
+}

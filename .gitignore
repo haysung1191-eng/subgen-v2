@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Local media outputs
+*.srt
+*.vtt
+*.mp4
+*.mkv
+*.avi
+*.mov
+*.wmv
+*.m4v
+*.webm
+*.mp3
+*.wav
+*.m4a
+*.flac
+*.aac
+*.ogg
+*-debug/
+*-compare/
+*-compare-all/
+*.subgen*.wav
+
+# Temp and logs
+*.log
+logs/
+debug/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
