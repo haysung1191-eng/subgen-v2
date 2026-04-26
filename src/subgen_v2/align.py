@@ -31,6 +31,7 @@ def align_utterances(
         model_name=config.model_name,
     )
     padding_sec = config.utterance_padding_ms / 1000.0
+    boundary_epsilon_sec = 0.05
     payload = []
     window_by_utterance: dict[int, tuple[float, float]] = {}
     for utterance in utterances:
@@ -65,8 +66,13 @@ def align_utterances(
             if end_f <= start_f:
                 continue
             window = window_by_utterance.get(utterance.utterance_id)
-            if window is not None and (start_f < window[0] or end_f > window[1]):
-                continue
+            if window is not None:
+                if end_f < window[0] - boundary_epsilon_sec or start_f > window[1] + boundary_epsilon_sec:
+                    continue
+                start_f = max(start_f, window[0])
+                end_f = min(end_f, window[1])
+                if end_f <= start_f:
+                    continue
             confidence_f = float(confidence) if confidence is not None else None
             tokens.append(
                 AlignedToken(

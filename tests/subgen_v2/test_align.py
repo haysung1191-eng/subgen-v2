@@ -78,6 +78,30 @@ def test_alignment_drops_tokens_outside_scoped_window(monkeypatch) -> None:
     assert [token.text for token in tokens] == ["inside"]
 
 
+def test_alignment_clamps_tokens_slightly_outside_scoped_window(monkeypatch) -> None:
+    utterance = _utterance()
+    fake_whisperx = SimpleNamespace(
+        load_align_model=lambda **kwargs: ("model", {"meta": True}),
+        align=lambda *args, **kwargs: {
+            "segments": [
+                {
+                    "id": 1,
+                    "words": [
+                        {"word": "near", "start": 0.04, "end": 1.04, "score": 0.9},
+                    ],
+                }
+            ]
+        },
+    )
+    monkeypatch.setitem(sys.modules, "whisperx", fake_whisperx)
+
+    tokens = align_utterances(np.zeros(16000, dtype=np.float32), 16000, [utterance], AlignmentConfig(utterance_padding_ms=0))
+
+    assert len(tokens) == 1
+    assert tokens[0].global_start == 0.1
+    assert tokens[0].global_end == 1.0
+
+
 def _utterance() -> DraftUtterance:
     return DraftUtterance(
         utterance_id=1,

@@ -69,6 +69,10 @@ def build_subtitles(
                 end_fallback_applied=end_fallback_applied,
                 end_gap_ms=gap_to_draft_end * 1000.0,
                 timing_authority=timing_authority,
+                cleanup_adjusted=False,
+                cleanup_reason=None,
+                cleanup_start_delta_ms=0.0,
+                cleanup_end_delta_ms=0.0,
             )
         )
 
@@ -96,6 +100,10 @@ def build_subtitles(
                 end_fallback_applied=segment.end_fallback_applied,
                 end_gap_ms=segment.end_gap_ms,
                 timing_authority=segment.timing_authority,
+                cleanup_adjusted=segment.cleanup_adjusted,
+                cleanup_reason=segment.cleanup_reason,
+                cleanup_start_delta_ms=segment.cleanup_start_delta_ms,
+                cleanup_end_delta_ms=segment.cleanup_end_delta_ms,
             )
         )
     final_segments = _cleanup(raw_segments, config)
@@ -153,32 +161,28 @@ def _cleanup(segments: list[SubtitleSegment], config: SubtitleConfig) -> list[Su
     for segment in sorted(segments, key=lambda item: (item.start, item.end)):
         start = segment.start
         end = segment.end
+        cleanup_reason = segment.cleanup_reason
         if end <= start:
             end = start + min_duration_sec
+            cleanup_reason = cleanup_reason or "min_duration"
         if end - start < min_duration_sec:
             end = start + min_duration_sec
+            cleanup_reason = cleanup_reason or "min_duration"
         if clean and start < clean[-1].end:
             prev = clean[-1]
-            prev_end = max(prev.token_start, start - tiny_overlap_fix_sec)
-            prev_end = max(prev.start + 0.001, prev_end)
-            clean[-1] = SubtitleSegment(
-                segment_id=prev.segment_id,
-                utterance_id=prev.utterance_id,
-                region_id=prev.region_id,
-                text=prev.text,
-                start=prev.start,
-                end=prev_end,
-                token_start=prev.token_start,
-                token_end=prev.token_end,
-                draft_start=prev.draft_start,
-                draft_end=prev.draft_end,
-                aligned_token_count=prev.aligned_token_count,
-                start_source=prev.start_source,
-                end_source=prev.end_source,
-                end_fallback_applied=prev.end_fallback_applied,
-                end_gap_ms=prev.end_gap_ms,
-                timing_authority=prev.timing_authority,
-            )
+            if start > prev.start:
+                prev_end = min(prev.end, max(prev.start + 0.001, start - tiny_overlap_fix_sec))
+                clean[-1] = _replace_segment(
+                    prev,
+                    end=prev_end,
+                    cleanup_reason="overlap_trim_previous_end",
+                )
+            else:
+                start = prev.end + tiny_overlap_fix_sec
+                if end <= start:
+                    end = start + min_duration_sec
+                cleanup_reason = "overlap_shift_current_start"
+        changed = start != segment.start or end != segment.end
         clean.append(
             SubtitleSegment(
                 segment_id=segment.segment_id,
@@ -197,6 +201,35 @@ def _cleanup(segments: list[SubtitleSegment], config: SubtitleConfig) -> list[Su
                 end_fallback_applied=segment.end_fallback_applied,
                 end_gap_ms=segment.end_gap_ms,
                 timing_authority=segment.timing_authority,
+                cleanup_adjusted=segment.cleanup_adjusted or changed,
+                cleanup_reason=cleanup_reason,
+                cleanup_start_delta_ms=(start - segment.start) * 1000.0,
+                cleanup_end_delta_ms=(end - segment.end) * 1000.0,
             )
         )
     return clean
+
+
+def _replace_segment(segment: SubtitleSegment, *, end: float, cleanup_reason: str) -> SubtitleSegment:
+    return SubtitleSegment(
+        segment_id=segment.segment_id,
+        utterance_id=segment.utterance_id,
+        region_id=segment.region_id,
+        text=segment.text,
+        start=segment.start,
+        end=end,
+        token_start=segment.token_start,
+        token_end=segment.token_end,
+        draft_start=segment.draft_start,
+        draft_end=segment.draft_end,
+        aligned_token_count=segment.aligned_token_count,
+        start_source=segment.start_source,
+        end_source=segment.end_source,
+        end_fallback_applied=segment.end_fallback_applied,
+        end_gap_ms=segment.end_gap_ms,
+        timing_authority=segment.timing_authority,
+        cleanup_adjusted=True,
+        cleanup_reason=cleanup_reason,
+        cleanup_start_delta_ms=segment.cleanup_start_delta_ms,
+        cleanup_end_delta_ms=(end - segment.end) * 1000.0,
+    )

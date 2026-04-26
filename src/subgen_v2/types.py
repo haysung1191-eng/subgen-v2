@@ -91,6 +91,10 @@ class SubtitleSegment:
     end_fallback_applied: bool = False
     end_gap_ms: float = 0.0
     timing_authority: str = "aligned_tokens"
+    cleanup_adjusted: bool = False
+    cleanup_reason: str | None = None
+    cleanup_start_delta_ms: float = 0.0
+    cleanup_end_delta_ms: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

@@ -63,6 +63,12 @@ Install the package and WhisperX alignment extra:
 pip install -e ".[align-whisperx]"
 ```
 
+For CUDA use, install a CUDA-enabled PyTorch build first using the official PyTorch selector, then verify:
+
+```powershell
+python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"
+```
+
 Verify `ffmpeg`:
 
 ```powershell
@@ -132,6 +138,12 @@ Important fields in `05_subtitles_final.json`:
 - `end_fallback_applied`
 - `end_gap_ms`
 - `timing_authority`
+- `cleanup_adjusted`
+- `cleanup_reason`
+- `cleanup_start_delta_ms`
+- `cleanup_end_delta_ms`
+
+Final cleanup enforces positive durations and resolves overlaps deterministically. When no-overlap conflicts with the requested minimum duration, no-overlap wins and the cleanup delta is recorded in debug output.
 
 ## Tests
 
@@ -142,7 +154,7 @@ python -m pytest -q
 Focused v2 tests:
 
 ```powershell
-python -m pytest -q tests\test_subgen_v2_cli.py tests\test_subgen_v2_debug.py tests\test_subgen_v2_subtitle.py tests\test_subgen_v2_align.py
+python -m pytest -q tests\subgen_v2
 ```
 
 ## Current Limitations
