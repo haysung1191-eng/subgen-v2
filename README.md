@@ -89,6 +89,15 @@ python -m subgen_v2.cli doctor
 
 ## Run
 
+Recommended Filmora workflow:
+
+```powershell
+python -m subgen_v2.cli "D:\path\to\sample.mp4" -o "D:\path\to\sample.v2.srt" --preset filmora-ko --device cuda --align-device cuda --debug-dir "D:\path\to\sample-v2-debug"
+python -m subgen_v2.review "D:\path\to\sample-v2-debug" --top 40
+```
+
+Import `sample.v2.srt` into Filmora first, then inspect the highest-risk lines from `timing_review.md` or `timing_review.html`.
+
 Direct CLI:
 
 ```powershell
@@ -107,10 +116,18 @@ File picker helper:
 .\run_v2.ps1
 ```
 
+The file picker uses `filmora-ko` by default and generates timing review files after the SRT is created.
+
 CPU file picker:
 
 ```powershell
 .\run_v2.ps1 -Device cpu -AlignDevice cpu -ComputeType int8
+```
+
+Tail-safe file picker:
+
+```powershell
+.\run_v2.ps1 -Preset filmora-ko-tail-safe
 ```
 
 ## Debug Output
@@ -123,6 +140,14 @@ When `--debug-dir` is provided, the pipeline writes:
 - `04_subtitles_raw.json`: subtitle segments before final cleanup
 - `05_subtitles_final.json`: final SRT segments with timing source fields
 - `summary.json`: run-level timing authority and fallback counts
+
+The review command reads those files and writes:
+
+- `timing_review.md`: quick manual review list
+- `timing_review.html`: browser-friendly review table
+- `timing_review.csv`: spreadsheet-friendly data
+- `timing_review.json`: machine-readable rows
+- `timing_review.srt`: review-only SRT overlay with risk tags
 
 Important fields in `05_subtitles_final.json`:
 
@@ -163,6 +188,13 @@ python -m pytest -q tests\subgen_v2
 - Qwen3-ForcedAligner is a future experimental backend candidate, not the default.
 - Some long Korean utterances may still need draft timing fallback when alignment coverage is weak.
 - Timing metrics help diagnose problems but do not replace human sync review.
+
+## Filmora Presets
+
+- `current`: original stricter defaults
+- `filmora-ko`: recommended editing preset for Korean travel videos
+- `filmora-ko-tail-safe`: more generous subtitle endings for long tails
+- `filmora-ko-strict`: tighter timing when subtitles feel too sticky
 
 ## License
 

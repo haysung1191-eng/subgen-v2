@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 
 @dataclass(slots=True)
@@ -63,3 +64,76 @@ class PipelineConfig:
     alignment: AlignmentConfig = field(default_factory=AlignmentConfig)
     subtitle: SubtitleConfig = field(default_factory=SubtitleConfig)
     debug: DebugConfig = field(default_factory=DebugConfig)
+
+
+PRESETS: dict[str, dict[str, dict[str, Any]]] = {
+    "current": {},
+    "filmora-ko": {
+        "vad": {
+            "threshold": 0.45,
+            "min_speech_ms": 200,
+            "min_silence_ms": 220,
+            "pre_roll_ms": 150,
+            "post_roll_ms": 250,
+            "merge_gap_ms": 250,
+        },
+        "alignment": {
+            "utterance_padding_ms": 300,
+        },
+        "subtitle": {
+            "hold_ms": 320,
+            "min_gap_to_next_ms": 30,
+            "min_duration_ms": 600,
+            "tiny_overlap_fix_ms": 10,
+            "end_fallback_threshold_ms": 240,
+        },
+    },
+    "filmora-ko-tail-safe": {
+        "vad": {
+            "threshold": 0.40,
+            "min_speech_ms": 200,
+            "min_silence_ms": 250,
+            "pre_roll_ms": 150,
+            "post_roll_ms": 300,
+            "merge_gap_ms": 300,
+        },
+        "alignment": {
+            "utterance_padding_ms": 400,
+        },
+        "subtitle": {
+            "hold_ms": 420,
+            "min_gap_to_next_ms": 15,
+            "min_duration_ms": 600,
+            "tiny_overlap_fix_ms": 10,
+            "end_fallback_threshold_ms": 200,
+        },
+    },
+    "filmora-ko-strict": {
+        "vad": {
+            "threshold": 0.50,
+            "min_speech_ms": 250,
+            "min_silence_ms": 150,
+            "pre_roll_ms": 100,
+            "post_roll_ms": 150,
+            "merge_gap_ms": 150,
+        },
+        "alignment": {
+            "utterance_padding_ms": 220,
+        },
+        "subtitle": {
+            "hold_ms": 220,
+            "min_gap_to_next_ms": 50,
+            "min_duration_ms": 500,
+            "tiny_overlap_fix_ms": 20,
+            "end_fallback_threshold_ms": 320,
+        },
+    },
+}
+
+
+def preset_names() -> tuple[str, ...]:
+    return tuple(PRESETS)
+
+
+def preset_value(preset: str, section: str, name: str, default: Any) -> Any:
+    return PRESETS.get(preset, {}).get(section, {}).get(name, default)

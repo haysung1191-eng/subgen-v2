@@ -1,4 +1,5 @@
 param(
+    [string]$Preset = "filmora-ko",
     [string]$Device = "cuda",
     [string]$AlignDevice = "cuda",
     [string]$ComputeType = "float16"
@@ -28,17 +29,25 @@ Set-Location $PSScriptRoot
 Write-Host "Input : $inputPath"
 Write-Host "Output: $outputPath"
 Write-Host "Debug : $debugDir"
+Write-Host "Preset: $Preset"
 
 python -m subgen_v2.cli `
     $inputPath `
     -o $outputPath `
+    --preset $Preset `
     --device $Device `
     --align-device $AlignDevice `
     --compute-type $ComputeType `
-    --align-utterance-padding-ms 180 `
-    --end-fallback-threshold-ms 320 `
     --debug-dir $debugDir
 
 if ($LASTEXITCODE -ne 0) {
     throw "subgen_v2 failed with exit code $LASTEXITCODE"
+}
+
+python -m subgen_v2.review `
+    $debugDir `
+    --top 40
+
+if ($LASTEXITCODE -ne 0) {
+    throw "subgen_v2 review failed with exit code $LASTEXITCODE"
 }

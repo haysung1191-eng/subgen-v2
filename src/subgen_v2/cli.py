@@ -7,13 +7,24 @@ import sys
 import tempfile
 from pathlib import Path
 
-from .config import AlignmentConfig, ASRConfig, AudioConfig, DebugConfig, PipelineConfig, SubtitleConfig, VADConfig
+from .config import (
+    AlignmentConfig,
+    ASRConfig,
+    AudioConfig,
+    DebugConfig,
+    PipelineConfig,
+    SubtitleConfig,
+    VADConfig,
+    preset_names,
+    preset_value,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="subgen-v2", description="Minimal timing-first Korean subtitle pipeline (v2).")
     parser.add_argument("input", type=Path, help="Input media path")
     parser.add_argument("-o", "--output", type=Path, default=None, help="Output SRT path")
+    parser.add_argument("--preset", choices=preset_names(), default="current", help="Preset defaults; explicit flags override preset values")
     parser.add_argument("--temp-wav", type=Path, default=None, help="Intermediate WAV path")
     parser.add_argument("--sample-rate", type=int, default=16000)
     parser.add_argument("--vad-threshold", type=float, default=0.5)
@@ -44,7 +55,9 @@ def main() -> None:
     if len(sys.argv) > 1 and sys.argv[1] == "doctor":
         run_doctor()
         return
-    args = build_parser().parse_args()
+    argv = sys.argv[1:]
+    args = build_parser().parse_args(argv)
+    _apply_preset(args, argv)
     input_path = args.input.resolve()
     output_path = args.output.resolve() if args.output else input_path.with_suffix(".v2.srt")
     debug_enabled = args.debug_dir is not None
@@ -108,6 +121,35 @@ def _build_config(
         ),
         debug=DebugConfig(enabled=debug_enabled, output_dir=debug_dir),
     )
+
+
+_PRESET_FIELDS = {
+    ("vad", "threshold"): ("vad_threshold", "--vad-threshold"),
+    ("vad", "min_speech_ms"): ("vad_min_speech_ms", "--vad-min-speech-ms"),
+    ("vad", "min_silence_ms"): ("vad_min_silence_ms", "--vad-min-silence-ms"),
+    ("vad", "pre_roll_ms"): ("vad_pre_roll_ms", "--vad-pre-roll-ms"),
+    ("vad", "post_roll_ms"): ("vad_post_roll_ms", "--vad-post-roll-ms"),
+    ("vad", "merge_gap_ms"): ("vad_merge_gap_ms", "--vad-merge-gap-ms"),
+    ("alignment", "utterance_padding_ms"): ("align_utterance_padding_ms", "--align-utterance-padding-ms"),
+    ("subtitle", "hold_ms"): ("subtitle_hold_ms", "--subtitle-hold-ms"),
+    ("subtitle", "min_gap_to_next_ms"): ("min_gap_to_next_ms", "--min-gap-to-next-ms"),
+    ("subtitle", "min_duration_ms"): ("min_duration_ms", "--min-duration-ms"),
+    ("subtitle", "tiny_overlap_fix_ms"): ("tiny_overlap_fix_ms", "--tiny-overlap-fix-ms"),
+    ("subtitle", "end_fallback_threshold_ms"): ("end_fallback_threshold_ms", "--end-fallback-threshold-ms"),
+}
+
+
+def _apply_preset(args: argparse.Namespace, argv: list[str]) -> None:
+    if args.preset == "current":
+        return
+    for (section, name), (attr, flag) in _PRESET_FIELDS.items():
+        if _flag_provided(argv, flag):
+            continue
+        setattr(args, attr, preset_value(args.preset, section, name, getattr(args, attr)))
+
+
+def _flag_provided(argv: list[str], flag: str) -> bool:
+    return any(item == flag or item.startswith(f"{flag}=") for item in argv)
 
 
 def _unique_temp_wav(input_path: Path) -> Path:
