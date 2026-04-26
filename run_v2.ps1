@@ -1,3 +1,9 @@
+param(
+    [string]$Device = "cuda",
+    [string]$AlignDevice = "cuda",
+    [string]$ComputeType = "float16"
+)
+
 $ErrorActionPreference = "Stop"
 
 Add-Type -AssemblyName System.Windows.Forms
@@ -26,8 +32,13 @@ Write-Host "Debug : $debugDir"
 python -m subgen_v2.cli `
     $inputPath `
     -o $outputPath `
-    --device cuda `
-    --align-device cuda `
+    --device $Device `
+    --align-device $AlignDevice `
+    --compute-type $ComputeType `
     --align-utterance-padding-ms 180 `
     --end-fallback-threshold-ms 320 `
     --debug-dir $debugDir
+
+if ($LASTEXITCODE -ne 0) {
+    throw "subgen_v2 failed with exit code $LASTEXITCODE"
+}

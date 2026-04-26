@@ -31,15 +31,20 @@ def align_utterances(
         model_name=config.model_name,
     )
     padding_sec = config.utterance_padding_ms / 1000.0
-    payload = [
-        {
-            "id": utterance.utterance_id,
-            "start": max(utterance.region_start, utterance.global_start - padding_sec),
-            "end": min(utterance.region_end, utterance.global_end + padding_sec),
-            "text": utterance.alignment_text or utterance.display_text,
-        }
-        for utterance in utterances
-    ]
+    payload = []
+    window_by_utterance: dict[int, tuple[float, float]] = {}
+    for utterance in utterances:
+        window_start = max(utterance.region_start, utterance.global_start - padding_sec)
+        window_end = min(utterance.region_end, utterance.global_end + padding_sec)
+        window_by_utterance[utterance.utterance_id] = (window_start, window_end)
+        payload.append(
+            {
+                "id": utterance.utterance_id,
+                "start": window_start,
+                "end": window_end,
+                "text": utterance.alignment_text or utterance.display_text,
+            }
+        )
     result = whisperx.align(payload, model_a, metadata, audio, config.device, return_char_alignments=False)
     segments = result.get("segments", []) if isinstance(result, dict) else []
     utterance_by_id = {utterance.utterance_id: utterance for utterance in utterances}
@@ -55,12 +60,14 @@ def align_utterances(
             if start is None or end is None:
                 continue
             confidence = item.get("score")
-            if confidence is not None and float(confidence) < config.min_word_confidence:
-                continue
             start_f = float(start)
             end_f = float(end)
             if end_f <= start_f:
                 continue
+            window = window_by_utterance.get(utterance.utterance_id)
+            if window is not None and (start_f < window[0] or end_f > window[1]):
+                continue
+            confidence_f = float(confidence) if confidence is not None else None
             tokens.append(
                 AlignedToken(
                     utterance_id=utterance.utterance_id,
@@ -68,7 +75,9 @@ def align_utterances(
                     text=str(item.get("word", "")).strip(),
                     global_start=start_f,
                     global_end=end_f,
-                    confidence=float(confidence) if confidence is not None else None,
+                    confidence=confidence_f,
+                    low_confidence=confidence_f is not None and confidence_f < config.min_word_confidence,
+                    timing_usable=True,
                 )
             )
     return _sorted_tokens(tokens)

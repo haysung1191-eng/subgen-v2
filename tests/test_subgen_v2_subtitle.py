@@ -95,3 +95,76 @@ def test_missing_aligned_tokens_should_keep_utterance_via_draft_fallback() -> No
     assert round(segment.end, 2) == 1.08
     assert segment.timing_authority == "draft_fallback"
     assert segment.aligned_token_count == 0
+
+
+def test_summary_reports_mixed_authority_when_fallbacks_are_used() -> None:
+    utterances = [
+        DraftUtterance(
+            utterance_id=0,
+            region_id=0,
+            region_start=0.0,
+            region_end=1.0,
+            local_start=0.0,
+            local_end=0.8,
+            global_start=0.0,
+            global_end=0.8,
+            display_text="aligned",
+            alignment_text="aligned",
+        ),
+        DraftUtterance(
+            utterance_id=1,
+            region_id=1,
+            region_start=1.0,
+            region_end=2.0,
+            local_start=0.0,
+            local_end=0.8,
+            global_start=1.0,
+            global_end=1.8,
+            display_text="fallback",
+            alignment_text="fallback",
+        ),
+    ]
+    tokens = [AlignedToken(utterance_id=0, region_id=0, text="aligned", global_start=0.1, global_end=0.6)]
+
+    result = build_subtitles(utterances, tokens, SubtitleConfig(hold_ms=0, end_fallback_threshold_ms=2000))
+
+    assert result.summary["timing_authority_summary"] == "mixed"
+    assert result.summary["aligned_start_count"] == 1
+    assert result.summary["draft_start_fallback_count"] == 1
+
+
+def test_cleanup_keeps_positive_duration_when_overlap_trims_previous_segment() -> None:
+    utterances = [
+        DraftUtterance(
+            utterance_id=0,
+            region_id=0,
+            region_start=0.0,
+            region_end=1.0,
+            local_start=0.0,
+            local_end=1.0,
+            global_start=0.0,
+            global_end=1.0,
+            display_text="a",
+            alignment_text="a",
+        ),
+        DraftUtterance(
+            utterance_id=1,
+            region_id=0,
+            region_start=0.0,
+            region_end=1.0,
+            local_start=0.0,
+            local_end=1.0,
+            global_start=0.0,
+            global_end=1.0,
+            display_text="b",
+            alignment_text="b",
+        ),
+    ]
+    tokens = [
+        AlignedToken(utterance_id=0, region_id=0, text="a", global_start=0.1, global_end=0.5),
+        AlignedToken(utterance_id=1, region_id=0, text="b", global_start=0.1, global_end=0.6),
+    ]
+
+    result = build_subtitles(utterances, tokens, SubtitleConfig(hold_ms=400, min_duration_ms=220))
+
+    assert all(segment.end > segment.start for segment in result.final_segments)

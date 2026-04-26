@@ -23,6 +23,12 @@ class PipelineResult:
     draft_count: int
     aligned_token_count: int
     subtitle_count: int
+    aligned_start_count: int
+    draft_start_fallback_count: int
+    draft_end_fallback_count: int
+    subtitles_with_zero_aligned_tokens: int
+    median_end_gap_ms: float
+    max_end_gap_ms: float
 
 
 def run_pipeline(config: PipelineConfig, progress: Callable[[str], None] | None = None) -> PipelineResult:
@@ -58,9 +64,17 @@ def run_pipeline(config: PipelineConfig, progress: Callable[[str], None] | None 
 
     _progress(progress, "build_subtitles")
     subtitles = build_subtitles(drafts, aligned_tokens, config.subtitle)
+    run_summary = {
+        "timing_authority_summary": subtitles.summary["timing_authority_summary"],
+        "region_count": len(regions),
+        "draft_count": len(drafts),
+        "aligned_token_count": len(aligned_tokens),
+        **subtitles.summary,
+    }
     if config.debug.enabled and config.debug.output_dir is not None:
         write_debug_json(config.debug.output_dir, "04_subtitles_raw.json", [segment.to_dict() for segment in subtitles.raw_segments])
         write_debug_json(config.debug.output_dir, "05_subtitles_final.json", [segment.to_dict() for segment in subtitles.final_segments])
+        write_debug_json(config.debug.output_dir, "summary.json", run_summary)
     _progress(progress, f"build_subtitles_done raw={len(subtitles.raw_segments)} final={len(subtitles.final_segments)}")
 
     _progress(progress, f"write_srt output={config.output_path}")
@@ -70,11 +84,17 @@ def run_pipeline(config: PipelineConfig, progress: Callable[[str], None] | None 
     return PipelineResult(
         output_path=config.output_path,
         debug_dir=config.debug.output_dir if config.debug.enabled else None,
-        timing_authority="aligned_tokens",
+        timing_authority=str(subtitles.summary["timing_authority_summary"]),
         region_count=len(regions),
         draft_count=len(drafts),
         aligned_token_count=len(aligned_tokens),
         subtitle_count=len(subtitles.final_segments),
+        aligned_start_count=int(subtitles.summary["aligned_start_count"]),
+        draft_start_fallback_count=int(subtitles.summary["draft_start_fallback_count"]),
+        draft_end_fallback_count=int(subtitles.summary["draft_end_fallback_count"]),
+        subtitles_with_zero_aligned_tokens=int(subtitles.summary["subtitles_with_zero_aligned_tokens"]),
+        median_end_gap_ms=float(subtitles.summary["median_end_gap_ms"]),
+        max_end_gap_ms=float(subtitles.summary["max_end_gap_ms"]),
     )
 
 

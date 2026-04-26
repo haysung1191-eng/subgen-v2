@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "subgen"
 version = "0.1.0"
-description = "Production-grade CLI subtitle generator optimized for timing accuracy"
+description = "Experimental timing-first Korean subtitle drafting CLI"
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{name = "Subgen"}]
@@ -19,13 +19,17 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+dev = [
+  "pytest>=8"
+]
 align = [
+  "whisperx>=3.3.0"
+]
+align-whisperx = [
   "whisperx>=3.3.0"
 ]
 
 [project.scripts]
-subgen = "subgen.cli:main"
-subgen-gui = "subgen.gui:main"
 subgen-v2 = "subgen_v2.cli:main"
 
 [tool.setuptools]

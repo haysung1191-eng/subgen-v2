@@ -11,6 +11,7 @@ from .types import AlignedToken, DraftUtterance, SubtitleSegment
 class AssemblyResult:
     raw_segments: list[SubtitleSegment]
     final_segments: list[SubtitleSegment]
+    summary: dict[str, int | float | str]
 
 
 def build_subtitles(
@@ -98,7 +99,49 @@ def build_subtitles(
             )
         )
     final_segments = _cleanup(raw_segments, config)
-    return AssemblyResult(raw_segments=raw_segments, final_segments=final_segments)
+    return AssemblyResult(
+        raw_segments=raw_segments,
+        final_segments=final_segments,
+        summary=_summarize(final_segments),
+    )
+
+
+def _summarize(segments: list[SubtitleSegment]) -> dict[str, int | float | str]:
+    aligned_start_count = sum(1 for item in segments if item.start_source == "aligned_tokens")
+    draft_start_fallback_count = sum(1 for item in segments if item.start_source == "draft_fallback")
+    draft_end_fallback_count = sum(1 for item in segments if item.end_fallback_applied)
+    subtitles_with_zero_aligned_tokens = sum(1 for item in segments if item.aligned_token_count == 0)
+    total = len(segments)
+    if total == 0:
+        authority = "none"
+    elif draft_start_fallback_count == total:
+        authority = "draft_fallback"
+    elif draft_start_fallback_count > 0 or draft_end_fallback_count > 0:
+        authority = "mixed"
+    else:
+        authority = "aligned_tokens"
+    end_gaps = sorted(item.end_gap_ms for item in segments)
+    median_end_gap = _median(end_gaps)
+    max_end_gap = max(end_gaps) if end_gaps else 0.0
+    return {
+        "timing_authority_summary": authority,
+        "subtitle_count": total,
+        "aligned_start_count": aligned_start_count,
+        "draft_start_fallback_count": draft_start_fallback_count,
+        "draft_end_fallback_count": draft_end_fallback_count,
+        "subtitles_with_zero_aligned_tokens": subtitles_with_zero_aligned_tokens,
+        "median_end_gap_ms": median_end_gap,
+        "max_end_gap_ms": max_end_gap,
+    }
+
+
+def _median(values: list[float]) -> float:
+    if not values:
+        return 0.0
+    midpoint = len(values) // 2
+    if len(values) % 2:
+        return values[midpoint]
+    return (values[midpoint - 1] + values[midpoint]) / 2.0
 
 
 def _cleanup(segments: list[SubtitleSegment], config: SubtitleConfig) -> list[SubtitleSegment]:
@@ -117,13 +160,14 @@ def _cleanup(segments: list[SubtitleSegment], config: SubtitleConfig) -> list[Su
         if clean and start < clean[-1].end:
             prev = clean[-1]
             prev_end = max(prev.token_start, start - tiny_overlap_fix_sec)
+            prev_end = max(prev.start + 0.001, prev_end)
             clean[-1] = SubtitleSegment(
                 segment_id=prev.segment_id,
                 utterance_id=prev.utterance_id,
                 region_id=prev.region_id,
                 text=prev.text,
                 start=prev.start,
-                end=max(prev.start, prev_end),
+                end=prev_end,
                 token_start=prev.token_start,
                 token_end=prev.token_end,
                 draft_start=prev.draft_start,

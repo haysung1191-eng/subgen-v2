@@ -2,121 +2,130 @@
 
 Experimental timing-first Korean subtitle drafting pipeline.
 
-This project prioritizes subtitle timing inspectability over polished transcript quality. Whisper is used for draft text, while aligned token timing is treated as the timing authority. The current focus is local/offline experimentation, not production-grade subtitle quality.
+This project prioritizes subtitle timing inspectability over polished transcript quality. Whisper/faster-whisper proposes draft text. Aligned token timing is the primary timing authority. Draft ASR timing is used only as an explicit fallback and is marked in debug output.
 
+## Status
 
-Minimal timing-first Korean subtitle drafting pipeline.
+`subgen_v2` is an experimental but usable CLI pipeline for local Korean subtitle drafting. It is not a polished end-user product.
 
-This repository is for one practical use case:
+Primary use case:
 
 - generate Korean subtitle drafts locally
 - keep subtitle onset timing inspectable
 - separate text generation from timing generation
-- use aligned tokens as the only timing authority
 - output `.srt` only
 
-The main rule of `v2` is:
+Out of scope:
 
-> Whisper proposes text, but aligned tokens determine time.
+- translation
+- diarization
+- streaming
+- GUI polish
 
-## Status
+## Pipeline
 
-`subgen_v2` is an experimental but usable CLI pipeline.
-
-It is not a polished end-user product.
-It is intended for:
-
-- Korean subtitle drafting
-- timing inspection
-- debugging alignment behavior
-- post-edit workflows where text can be cleaned later by another model or by hand
-
-## What Is Included
-
-The clean `v2` pipeline lives in [src/subgen_v2](/D:/AI/자막생성/src/subgen_v2).
+The clean v2 pipeline lives in `src/subgen_v2`.
 
 Stages:
 
-1. deterministic `ffmpeg` mono 16k extraction
+1. deterministic `ffmpeg` mono 16 kHz extraction
 2. Silero VAD speech regions
 3. faster-whisper draft ASR
-4. whisperx alignment
-5. subtitle assembly from aligned tokens
+4. WhisperX alignment
+5. subtitle assembly from aligned tokens, with marked draft fallback when alignment coverage is weak
 6. minimal cleanup
 7. SRT output
 
-Optional per-stage debug dumps:
+## Timing Policy
 
-- `01_regions.json`
-- `02_draft.json`
-- `03_aligned_tokens.json`
-- `04_subtitles_raw.json`
-- `05_subtitles_final.json`
+The intended policy is:
 
-## Timing Authority
+- `aligned_tokens`: start and end timing came from aligned tokens
+- `aligned_start_draft_end_fallback`: start came from aligned tokens, end used draft timing fallback
+- `draft_fallback`: no aligned tokens were available for that subtitle, so draft timing was used
+- `mixed`: the run used more than one timing source
 
-`subgen_v2` has exactly one timing authority:
+After each run, the CLI prints fallback counts. When `--debug-dir` is used, `summary.json` and `05_subtitles_final.json` show per-subtitle timing sources.
 
-- aligned token timestamps from [align.py](/D:/AI/자막생성/src/subgen_v2/align.py)
+## Windows Clean Install
 
-Draft ASR timestamps are not the final source of truth.
-Post-processing is intentionally minimal and should not invent timing.
-
-## Requirements
-
-- Windows
-- Python 3.10+
-- NVIDIA GPU recommended
-- `ffmpeg` on `PATH`
-- PyTorch
-- `faster-whisper`
-- `silero-vad`
-- `whisperx`
-
-Install editable package:
+Create and activate a virtual environment:
 
 ```powershell
-cd "D:\AI\자막생성"
-pip install -e .
-pip install ".[align]"
+py -3.10 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip setuptools wheel
 ```
 
-## Main Commands
-
-Run `v2` directly:
+Install the package and WhisperX alignment extra:
 
 ```powershell
-cd "D:\AI\자막생성"
+pip install -e ".[align-whisperx]"
+```
+
+Verify `ffmpeg`:
+
+```powershell
+ffmpeg -version
+```
+
+Check the local environment:
+
+```powershell
+subgen-v2 doctor
+```
+
+If `subgen-v2` is not on PATH, use:
+
+```powershell
+python -m subgen_v2.cli doctor
+```
+
+## Run
+
+Direct CLI:
+
+```powershell
 python -m subgen_v2.cli "D:\path\to\sample.mp4" -o "D:\path\to\sample.v2.srt" --device cuda --align-device cuda --debug-dir "D:\path\to\sample-v2-debug"
 ```
 
-Or use the file picker helper:
+CPU fallback example:
 
 ```powershell
-cd "D:\AI\자막생성"
+python -m subgen_v2.cli "D:\path\to\sample.mp4" -o "D:\path\to\sample.v2.srt" --device cpu --align-device cpu --compute-type int8 --debug-dir "D:\path\to\sample-v2-debug"
+```
+
+File picker helper:
+
+```powershell
 .\run_v2.ps1
 ```
 
-That script:
+CPU file picker:
 
-- opens a file picker
-- lets you choose one media file
-- writes `filename.v2.srt`
-- writes `filename-v2-debug`
+```powershell
+.\run_v2.ps1 -Device cpu -AlignDevice cpu -ComputeType int8
+```
 
-## Debugging
+## Debug Output
 
-If timing looks wrong, inspect these files first:
+When `--debug-dir` is provided, the pipeline writes:
 
-- `03_aligned_tokens.json`
-- `05_subtitles_final.json`
+- `01_regions.json`: padded VAD speech regions
+- `02_draft.json`: faster-whisper draft utterances and diagnostic timestamps
+- `03_aligned_tokens.json`: aligned tokens from the alignment backend
+- `04_subtitles_raw.json`: subtitle segments before final cleanup
+- `05_subtitles_final.json`: final SRT segments with timing source fields
+- `summary.json`: run-level timing authority and fallback counts
 
-Useful fields in `05_subtitles_final.json`:
+Important fields in `05_subtitles_final.json`:
 
 - `start`
 - `end`
 - `token_start`
 - `token_end`
+- `draft_start`
+- `draft_end`
 - `aligned_token_count`
 - `start_source`
 - `end_source`
@@ -124,51 +133,25 @@ Useful fields in `05_subtitles_final.json`:
 - `end_gap_ms`
 - `timing_authority`
 
-These make it easier to see whether a bad subtitle came from:
-
-- poor alignment coverage
-- missing aligned tokens
-- fallback to draft end
-- minimal overlap cleanup
-
-## Current Practical Notes
-
-What `v2` already does well:
-
-- onset timing is easier to reason about than the old pipeline
-- timing provenance is easier to inspect
-- stage-by-stage JSON makes debugging possible
-
-What is still weak:
-
-- alignment coverage on some long Korean utterances
-- draft ASR quality in some clips
-- end timing on weak or stretched sentence endings
-
 ## Tests
 
-Run focused `v2` tests:
+```powershell
+python -m pytest -q
+```
+
+Focused v2 tests:
 
 ```powershell
-cd "D:\AI\자막생성"
 python -m pytest -q tests\test_subgen_v2_cli.py tests\test_subgen_v2_debug.py tests\test_subgen_v2_subtitle.py tests\test_subgen_v2_align.py
 ```
 
-## Project Layout
+## Current Limitations
 
-- [src/subgen_v2](/D:/AI/자막생성/src/subgen_v2): clean timing-first pipeline
-- [run_v2.ps1](/D:/AI/자막생성/run_v2.ps1): file picker runner
-- [tests/test_subgen_v2_cli.py](/D:/AI/자막생성/tests/test_subgen_v2_cli.py): CLI sanity test
-- [tests/test_subgen_v2_debug.py](/D:/AI/자막생성/tests/test_subgen_v2_debug.py): debug file output test
-- [tests/test_subgen_v2_subtitle.py](/D:/AI/자막생성/tests/test_subgen_v2_subtitle.py): subtitle assembly tests
-- [tests/test_subgen_v2_align.py](/D:/AI/자막생성/tests/test_subgen_v2_align.py): alignment window scoping test
+- WhisperX is the default alignment backend for v0.1.
+- Qwen3-ForcedAligner is a future experimental backend candidate, not the default.
+- Some long Korean utterances may still need draft timing fallback when alignment coverage is weak.
+- Timing metrics help diagnose problems but do not replace human sync review.
 
-## Before Publishing
+## License
 
-See:
-
-- [RELEASE_CHECKLIST.md](/D:/AI/자막생성/RELEASE_CHECKLIST.md)
-- [REPO_DESCRIPTION.md](/D:/AI/자막생성/REPO_DESCRIPTION.md)
-
-There is currently no `LICENSE` file in this repository.
-Choose a license before making the repository public.
+MIT. See `LICENSE`.

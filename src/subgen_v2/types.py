@@ -66,6 +66,8 @@ class AlignedToken:
     global_start: float
     global_end: float
     confidence: float | None = None
+    low_confidence: bool = False
+    timing_usable: bool = True
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
