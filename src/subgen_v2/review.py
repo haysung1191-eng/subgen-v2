@@ -139,6 +139,7 @@ def _review_segment(
     boundary_start_risk_ms = (start - region_start) * 1000.0 if region_start is not None else None
     boundary_end_risk_ms = (region_end - max(token_end, draft_end)) * 1000.0 if region_end is not None else None
     alignment_coverage_ratio = _coverage_ratio(draft, utterance_tokens)
+    dense_handoff = next_gap_ms is not None and next_gap_ms <= 30.0 and end < token_end - 0.05
 
     score, tags = _score_segment(
         segment=segment,
@@ -150,6 +151,7 @@ def _review_segment(
         boundary_end_risk_ms=boundary_end_risk_ms,
         token_end=token_end,
         end=end,
+        dense_handoff=dense_handoff,
         utterance_tokens=utterance_tokens,
     )
     return ReviewRow(
@@ -203,6 +205,7 @@ def _score_segment(
     boundary_end_risk_ms: float | None,
     token_end: float,
     end: float,
+    dense_handoff: bool,
     utterance_tokens: list[dict[str, Any]],
 ) -> tuple[int, list[str]]:
     score = 0
@@ -227,15 +230,23 @@ def _score_segment(
         score += 15
         tags.append("MEDIUM_END_GAP")
     cleanup_end_delta = float(segment.get("cleanup_end_delta_ms", 0.0))
-    if cleanup_end_delta <= -200:
-        score += 45
-        tags.append("CLEANUP_TRIMMED_END")
-    elif cleanup_end_delta <= -100:
-        score += 25
-        tags.append("CLEANUP_TRIMMED_END")
+    if dense_handoff:
+        score += 10
+        tags.append("DENSE_SUBTITLE_HANDOFF")
+    else:
+        if cleanup_end_delta <= -200:
+            score += 45
+            tags.append("CLEANUP_TRIMMED_END")
+        elif cleanup_end_delta <= -100:
+            score += 25
+            tags.append("CLEANUP_TRIMMED_END")
     if end < token_end - 0.05:
-        score += 80
-        tags.append("FINAL_END_BEFORE_TOKEN_END")
+        if dense_handoff:
+            score += 10
+            tags.append("FINAL_END_BEFORE_TOKEN_END_HANDOFF")
+        else:
+            score += 80
+            tags.append("FINAL_END_BEFORE_TOKEN_END")
     if alignment_coverage_ratio < 0.50:
         score += 70
         tags.append("LOW_ALIGNMENT_COVERAGE")
@@ -287,6 +298,8 @@ def _recommend(tags: list[str]) -> str:
         return "Check onset; this line used draft start fallback."
     if "FINAL_END_BEFORE_TOKEN_END" in tags or "CLEANUP_TRIMMED_END" in tags:
         return "Check ending; cleanup shortened this line."
+    if "DENSE_SUBTITLE_HANDOFF" in tags:
+        return "Likely dense handoff; check only if this feels abrupt in Filmora."
     if "LONG_TAIL_RISK" in tags or "HIGH_END_GAP" in tags:
         return "Check ending; likely long Korean tail or weak alignment coverage."
     if "VAD_END_BOUNDARY" in tags:
